@@ -16,12 +16,16 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt import ToolNode, tools_condition
+from supabase import create_client
+
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_PUBLISHABLE_KEY"))
+resposta = supabase.table("chargers").select("name, price_per_kwh, price_per_minute, status, queue_count, address, connector_type, opening_hours").execute()
 
 llm_gemini = init_chat_model("gemini-3.6-flash", model_provider = "google_genai")
 
 SYSTEM_PROMPT = (
     """
-    Você é o assistente virtual da GoodWe, um site de carregadores elétricos. Seu objetivo é ajudar os usuários com dúvidas sobre os lugares de carregamento, os preços e o funcionamento do sistema.
+    Você é o assistente virtual da AXIS, um site de carregadores elétricos. Seu objetivo é ajudar os usuários com dúvidas sobre os lugares de carregamento, os preços e o funcionamento do sistema.
     
     - Responda apenas sobre: preços dos lugares cadastrados, disponibilidade dos carregadores, como funciona o sistema de carregamento e dúvidas básicas sobre o site. 
     - Se a pergunta fugir desse assunto, diga educadamente que não pode ajudar com isso e ofereça ajuda com algo dentro do escopo.
@@ -42,9 +46,9 @@ SYSTEM_PROMPT = (
 
 @tool
 def precos (nome: str) -> str:
-    """ Retorna o valor de R$ da recarga do carregador."""
-    estabelecimento = {"Fiap Paulista": "4,80", "Fiap Aclimação": "5,70"}
-    return estabelecimento.get(nome, "Não encontrei esse lugar cadastrado")
+    """ Retorna nome, preços, status e fila de todos os carregadores."""
+    consulta = supabase.table("chargers").select("name, price_per_kwh, price_per_minute, status, queue_count, address, connector_type, opening_hours").execute()
+    return str(consulta.data)
 
 llm_com_tools = llm_gemini.bind_tools([precos])
 
@@ -61,5 +65,5 @@ builder.add_conditional_edges("modelo", tools_condition)
 builder.add_edge("tools", "modelo")
 graph = builder.compile()
 
-pergunta = graph.invoke({"messages": [HumanMessage("Olá, gostaria de saber sobre o carregador da Fiap Paulista, qual seria a faixa de preco do carregador?")]})
+pergunta = graph.invoke({"messages": [HumanMessage("O carregador do Café Jardins está disponível? Quanto custa?")]})
 print(pergunta["messages"][-1].text)
