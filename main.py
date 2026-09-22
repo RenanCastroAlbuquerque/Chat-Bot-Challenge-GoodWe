@@ -20,6 +20,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from supabase import create_client
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
 
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_PUBLISHABLE_KEY"))
 resposta = supabase.table("chargers").select("name, price_per_kwh, price_per_minute, status, queue_count, address, connector_type, opening_hours").execute()
@@ -74,6 +76,13 @@ graph = builder.compile(checkpointer = memoria)
 config = {"configurable": {"thread_id": "1"}}
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"] 
+)
+
 
 class Pergunta(BaseModel):
     pergunta: str
@@ -82,5 +91,9 @@ class Pergunta(BaseModel):
 @app.post("/chat")
 def chat(dados: Pergunta):
     config = {"configurable": {"thread_id": dados.thread_id}}
-    resultado = graph.invoke({"messages":[HumanMessage(dados.pergunta)]}, config)
-    return {"resposta": resultado["messages"][-1].text}
+    try:
+        resultado = graph.invoke({"messages":[HumanMessage(dados.pergunta)]}, config)
+        return {"resposta": resultado["messages"][-1].text}
+    except Exception as erro:
+        return {"resposta": "Não consegui processar sua pergunta agora. Tente novamente em instantes."}
+
